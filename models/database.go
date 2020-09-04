@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -19,6 +20,7 @@ type Data struct {
 
 //データ格納用のストラクト
 type Todo struct {
+	Id      int
 	Time    string
 	Content string
 }
@@ -36,8 +38,9 @@ func init() {
 	//todoテーブルの作成
 	cmd := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
-			Time STRING,
-			Content STRING)`, tableName)
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			time STRING,
+			content STRING)`, tableName)
 
 	//cmdの実行
 	_, err := DbConnection.Exec(cmd)
@@ -46,7 +49,29 @@ func init() {
 	}
 }
 
-//DBの中身を取得
+//データを一つ取得
+func GetOne(r *http.Request) Todo {
+	DbConnection, _ := sql.Open("sqlite3", "./todo.sql")
+	defer DbConnection.Close()
+
+	//編集したいデータのIDを取得
+	idS := r.URL.Path[len("/edit/"):]
+	idI, _ := strconv.Atoi(idS)
+	cmd := fmt.Sprintf(`
+		SELECT * FROM %s WHERE id = ? `, tableName)
+
+	row := DbConnection.QueryRow(cmd, idI)
+
+	var todo Todo
+	err := row.Scan(&todo.Id, &todo.Time, &todo.Content)
+	if err != nil {
+		log.Println(err)
+	}
+
+	return todo
+}
+
+//DBの中身を全取得
 func GetAll() (todo *Data, err error) {
 	DbConnection, _ := sql.Open("sqlite3", "./todo.sql")
 	defer DbConnection.Close()
@@ -64,7 +89,7 @@ func GetAll() (todo *Data, err error) {
 	for rows.Next() {
 		var t Todo
 		// Scanにて、structのアドレスにデータを入れる
-		err := rows.Scan(&t.Time, &t.Content)
+		err := rows.Scan(&t.Id, &t.Time, &t.Content)
 		if err != nil {
 			log.Println(err)
 		}
@@ -82,10 +107,48 @@ func Insert(w http.ResponseWriter, r *http.Request) {
 	defer DbConnection.Close()
 
 	cmd := fmt.Sprintf(`
-		INSERT INTO %s (Time, Content) VALUES (?, ?)`, tableName)
+		INSERT INTO %s (id, time, content) VALUES (NULL, ?, ?)`, tableName)
 
 	// Execの第2引数以降はDBに入れたいデータ
 	_, err := DbConnection.Exec(cmd, time, content)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+//Update
+func Update(w http.ResponseWriter, r *http.Request) {
+	DbConnection, _ := sql.Open("sqlite3", "./todo.sql")
+	defer DbConnection.Close()
+
+	//IDの取得
+	idS := r.URL.Path[len("/update/"):]
+	idI, _ := strconv.Atoi(idS)
+	//情報の更新
+	time := time.Now()
+	content := r.FormValue("content")
+
+	cmd := fmt.Sprintf(`
+		UPDATE  %s SET (time, content) = (?, ?) WHERE id=? `, tableName)
+	_, err := DbConnection.Exec(cmd, time, content, idI)
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+//Delete
+func Delete(w http.ResponseWriter, r *http.Request) {
+	DbConnection, _ := sql.Open("sqlite3", "./todo.sql")
+	defer DbConnection.Close()
+
+	idS := r.URL.Path[len("/delete/"):]
+	idI, _ := strconv.Atoi(idS)
+	cmd := fmt.Sprintf(`
+		DELETE FROM  %s  WHERE id=? `, tableName)
+	_, err := DbConnection.Exec(cmd, idI)
 	if err != nil {
 		log.Fatalln(err)
 	}

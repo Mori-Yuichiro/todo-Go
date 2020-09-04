@@ -10,11 +10,15 @@
 <body>
     <h1 id="theme"></h1>
 
-    <p>[<a href="/newpost">新規作成</a>]</p>
+    <form action="/new" method="POST">
+        <textarea name="content"></textarea><br>
+        <input type="submit" value="Save" />
+    </form>
 
     {{ range. }}
         <p>{{ .Time }} : {{ .Content }}</p>
-        <button>削除</button>
+        <label><a href="/edit/{{ .Id }}">[編集]</a></label>
+        <a href="/delete/{{ .Id }}">[削除]</a></label>
     {{ end }}
 
     <script>
